@@ -4,7 +4,9 @@
 #include "esp_log.h"
 #include "wifi_manager.h"
 #include "azure_iot_mqtt.h"
+#include "web_server.h"
 #include "azure_config.h"
+#include "esp_netif.h"
 #include <cJSON.h>
 #include <stdio.h>
 
@@ -57,6 +59,29 @@ extern "C" void app_main(void) {
     
     printf("[MAIN] WiFi CONNECTED! IP obtained.\n");
     ESP_LOGI(TAG, "WiFi connected! Initializing Azure IoT Hub connection...");
+    
+    // Get and print IP address
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+            printf("\n========================================\n");
+            printf("[MAIN] ESP32 IP Address: " IPSTR "\n", IP2STR(&ip_info.ip));
+            printf("[MAIN] Open http://" IPSTR " in your browser\n", IP2STR(&ip_info.ip));
+            printf("========================================\n\n");
+            ESP_LOGI(TAG, "ESP32 IP: " IPSTR, IP2STR(&ip_info.ip));
+        }
+    }
+    
+    // Start web server
+    printf("[MAIN] Starting web server...\n");
+    ret = web_server_start();
+    if (ret != ESP_OK) {
+        printf("[MAIN] WARNING: Web server failed to start (error: %d)\n", ret);
+        ESP_LOGW(TAG, "Web server failed to start");
+    } else {
+        printf("[MAIN] Web server started successfully\n");
+    }
     
     // Initialize Azure IoT Hub MQTT
     printf("[MAIN] Initializing Azure IoT Hub MQTT connection...\n");
