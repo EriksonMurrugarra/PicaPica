@@ -16,12 +16,24 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
 
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
-            printf("[MQTT] *** CONNECTED to Azure IoT Hub ***\n");
-            ESP_LOGI(TAG, "MQTT Connected to Azure IoT Hub");
-            mqtt_connected = true;
-            
-            // Subscribe to device-to-cloud messages (if needed)
-            // For now, we'll just publish telemetry
+            {
+                printf("[MQTT] *** CONNECTED to Azure IoT Hub ***\n");
+                ESP_LOGI(TAG, "MQTT Connected to Azure IoT Hub");
+                mqtt_connected = true;
+                
+                // Subscribe to cloud-to-device messages
+                // Topic format: devices/{deviceId}/messages/devicebound/#
+                char subscribe_topic[256];
+                snprintf(subscribe_topic, sizeof(subscribe_topic), "devices/%s/messages/devicebound/#", DEVICE_ID);
+                int msg_id = esp_mqtt_client_subscribe(mqtt_client, subscribe_topic, 1);
+                if (msg_id >= 0) {
+                    printf("[MQTT] Subscribed to cloud-to-device messages: %s\n", subscribe_topic);
+                    ESP_LOGI(TAG, "Subscribed to: %s", subscribe_topic);
+                } else {
+                    printf("[MQTT] ERROR: Failed to subscribe to cloud-to-device messages\n");
+                    ESP_LOGE(TAG, "Failed to subscribe");
+                }
+            }
             break;
             
         case MQTT_EVENT_DISCONNECTED:
@@ -33,6 +45,32 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         case MQTT_EVENT_PUBLISHED:
             printf("[MQTT] Message published successfully, msg_id=%d\n", event->msg_id);
             ESP_LOGI(TAG, "MQTT Published, msg_id=%d", event->msg_id);
+            break;
+
+        case MQTT_EVENT_DATA:
+            {
+                printf("\n========================================\n");
+                printf("RECIBIDO MENSAJE\n");
+                printf("========================================\n");
+                printf("[MQTT] Topic: %.*s\n", event->topic_len, event->topic);
+                printf("[MQTT] Data length: %d bytes\n", event->data_len);
+                
+                // Print the message content
+                if (event->data_len > 0) {
+                    printf("[MQTT] Message content: %.*s\n", event->data_len, event->data);
+                }
+                
+                // If message is chunked, print chunk info
+                if (event->total_data_len != event->data_len) {
+                    printf("[MQTT] Chunked message: %d/%d bytes\n", 
+                           event->data_len, event->total_data_len);
+                }
+                
+                printf("========================================\n\n");
+                
+                ESP_LOGI(TAG, "Received message on topic: %.*s", event->topic_len, event->topic);
+                ESP_LOGI(TAG, "Data: %.*s", event->data_len, event->data);
+            }
             break;
 
         case MQTT_EVENT_ERROR:
@@ -50,6 +88,37 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                 }
             }
             break;
+
+        case MQTT_EVENT_SUBSCRIBED:
+            printf("[MQTT] Successfully subscribed to topic, msg_id=%d\n", event->msg_id);
+            ESP_LOGI(TAG, "Subscribed, msg_id=%d", event->msg_id);
+            break;
+
+        case MQTT_EVENT_UNSUBSCRIBED:
+            printf("[MQTT] Successfully unsubscribed from topic, msg_id=%d\n", event->msg_id);
+            ESP_LOGI(TAG, "Unsubscribed, msg_id=%d", event->msg_id);
+            break;
+
+        case MQTT_EVENT_BEFORE_CONNECT:
+            printf("[MQTT] Before connect event\n");
+            ESP_LOGI(TAG, "Before connect");
+            break;
+
+        case MQTT_EVENT_DELETED:
+            printf("[MQTT] MQTT client deleted\n");
+            ESP_LOGI(TAG, "MQTT client deleted");
+            break;
+
+        case MQTT_USER_EVENT:
+            printf("[MQTT] User event received\n");
+            ESP_LOGI(TAG, "User event");
+            break;
+
+        // case MQTT_EVENT_ANY:
+        //     // This case is included for completeness but shouldn't be reached
+        //     // since we register handlers for specific events
+        //     printf("[MQTT] MQTT_EVENT_ANY received (event_id: %d)\n", event->event_id);
+        //     break;
 
         default:
             printf("[MQTT] Other event id: %d\n", event->event_id);
@@ -113,8 +182,9 @@ esp_err_t azure_iot_mqtt_init(void) {
     esp_mqtt_client_register_event(mqtt_client, MQTT_EVENT_CONNECTED, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(mqtt_client, MQTT_EVENT_DISCONNECTED, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(mqtt_client, MQTT_EVENT_PUBLISHED, mqtt_event_handler, NULL);
+    esp_mqtt_client_register_event(mqtt_client, MQTT_EVENT_DATA, mqtt_event_handler, NULL);
     esp_mqtt_client_register_event(mqtt_client, MQTT_EVENT_ERROR, mqtt_event_handler, NULL);
-    printf("[MQTT] Event handlers registered\n");
+    printf("[MQTT] Event handlers registered (including cloud-to-device message handler)\n");
     
     printf("[MQTT] Starting MQTT client...\n");
     esp_err_t err = esp_mqtt_client_start(mqtt_client);
