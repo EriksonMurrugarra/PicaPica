@@ -19,7 +19,7 @@
 // Generate this using Azure CLI: az iot hub generate-sas-token --hub-name <HUB_NAME> --device-id <DEVICE_ID> --duration 3600
 // Format: SharedAccessSignature sr={hub-name}.azure-devices.net%2Fdevices%2F{device-id}&sig={signature}&se={expiry}
 // Example: "SharedAccessSignature sr=mi-hub-test.azure-devices.net%2Fdevices%2FESP32_001&sig=ABC123...&se=1735689600"
-#define SAS_TOKEN "SharedAccessSignature sr=iot-hub-demo-arduino.azure-devices.net%2Fdevices%2FESP32_001&sig=qHZ0oNQIrSZppuwhk%2FnKwrmef73aL5mvjf3v3fitc5o%3D&se=1765837011"
+#define SAS_TOKEN "SharedAccessSignature sr=iot-hub-demo-arduino.azure-devices.net%2Fdevices%2FESP32_001&sig=YySeSDYPFxJ5DJ0pvVSJIeR%2B5IVOdUlIOSZHx%2BJCCcc%3D&se=1797621376"
 
 // Alternative: If you prefer to use connection string, you can parse it
 // Connection string format: HostName={hub-name}.azure-devices.net;DeviceId={device-id};SharedAccessKey={key}

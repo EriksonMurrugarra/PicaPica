@@ -38,9 +38,16 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         case MQTT_EVENT_ERROR:
             printf("[MQTT] ERROR occurred!\n");
             ESP_LOGE(TAG, "MQTT Error");
-            if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
-                printf("[MQTT] Transport error: %s\n", strerror(event->error_handle->esp_transport_sock_errno));
-                ESP_LOGE(TAG, "Last errno string (%s)", strerror(event->error_handle->esp_transport_sock_errno));
+            if (event->error_handle) {
+                printf("[MQTT] Error type: %d\n", event->error_handle->error_type);
+                if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
+                    printf("[MQTT] Transport error: %s (errno: %d)\n", 
+                           strerror(event->error_handle->esp_transport_sock_errno),
+                           event->error_handle->esp_transport_sock_errno);
+                    ESP_LOGE(TAG, "Last errno string (%s)", strerror(event->error_handle->esp_transport_sock_errno));
+                } else if (event->error_handle->error_type == MQTT_ERROR_TYPE_CONNECTION_REFUSED) {
+                    printf("[MQTT] Connection refused - check credentials (SAS token may be expired)\n");
+                }
             }
             break;
 
@@ -82,6 +89,16 @@ esp_err_t azure_iot_mqtt_init(void) {
     mqtt_cfg.credentials.authentication.password = SAS_TOKEN;
     mqtt_cfg.session.keepalive = 60;
     
+    // Configure SSL/TLS - skip certificate verification (for development)
+    // With CONFIG_ESP_TLS_INSECURE=y and CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y
+    // we need to explicitly configure the verification settings
+    mqtt_cfg.broker.verification.skip_cert_common_name_check = true;
+    // Don't use global CA store when in insecure mode
+    mqtt_cfg.broker.verification.use_global_ca_store = false;
+    mqtt_cfg.broker.verification.certificate = NULL;
+    
+    printf("[MQTT] SSL/TLS configured (insecure mode - certificate verification disabled)\n");
+    printf("[MQTT] Using CONFIG_ESP_TLS_INSECURE and CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY\n");
     printf("[MQTT] Initializing MQTT client...\n");
     mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
     if (mqtt_client == NULL) {
