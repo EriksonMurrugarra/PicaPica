@@ -90,34 +90,37 @@ extern "C" void app_main(void) {
     printf("[MAIN] Starting main loop...\n");
     ESP_LOGI(TAG, "Connected to Azure IoT Hub! Starting main loop...");
     
-    // Main loop: blink LED and send telemetry
-    int counter = 0;
+    // Main loop: wait and process messages
+    // LED control is now handled via MQTT messages (ON/OFF commands)
     while (1) {
-        // Blink LED
-        gpio_set_level(LED_PIN, 1);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        gpio_set_level(LED_PIN, 0);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        // LED blinking disabled - LED is now controlled via MQTT messages
+        // gpio_set_level(LED_PIN, 1);
+        // vTaskDelay(1000 / portTICK_PERIOD_MS);
+        // gpio_set_level(LED_PIN, 0);
+        // vTaskDelay(1000 / portTICK_PERIOD_MS);
         
-        // Send telemetry to Azure IoT Hub every 5 seconds
-        counter++;
-        if (counter >= 5 && azure_iot_is_connected()) {
-            printf("[MAIN] Sending telemetry (counter: %d)...\n", counter);
-            // Create JSON telemetry message
-            cJSON *json = cJSON_CreateObject();
-            cJSON_AddNumberToObject(json, "led_state", gpio_get_level(LED_PIN));
-            cJSON_AddNumberToObject(json, "counter", counter);
-            cJSON_AddStringToObject(json, "device_id", DEVICE_ID);
-            
-            char *json_string = cJSON_Print(json);
-            if (json_string != NULL) {
-                printf("[MAIN] Telemetry JSON: %s\n", json_string);
-                azure_iot_send_telemetry(json_string);
-                free(json_string);
-            }
-            cJSON_Delete(json);
-            
-            counter = 0;
-        }
+        // Telemetry sending disabled for now
+        // counter++;
+        // if (counter >= 5 && azure_iot_is_connected()) {
+        //     printf("[MAIN] Sending telemetry (counter: %d)...\n", counter);
+        //     // Create JSON telemetry message
+        //     cJSON *json = cJSON_CreateObject();
+        //     cJSON_AddNumberToObject(json, "led_state", gpio_get_level(LED_PIN));
+        //     cJSON_AddNumberToObject(json, "counter", counter);
+        //     cJSON_AddStringToObject(json, "device_id", DEVICE_ID);
+        //     
+        //     char *json_string = cJSON_Print(json);
+        //     if (json_string != NULL) {
+        //         printf("[MAIN] Telemetry JSON: %s\n", json_string);
+        //         azure_iot_send_telemetry(json_string);
+        //         free(json_string);
+        //     }
+        //     cJSON_Delete(json);
+        //     
+        //     counter = 0;
+        // }
+        
+        // Just wait and let MQTT event handler process messages
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }

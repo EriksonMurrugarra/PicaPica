@@ -3,12 +3,15 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "esp_event.h"
+#include "driver/gpio.h"
 #include <string.h>
 #include <stdio.h>
 
 static const char *TAG = "AZURE_IOT_MQTT";
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 static bool mqtt_connected = false;
+
+#define LED_PIN GPIO_NUM_17
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                                 int32_t event_id, void *event_data) {
@@ -55,9 +58,34 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                 printf("[MQTT] Topic: %.*s\n", event->topic_len, event->topic);
                 printf("[MQTT] Data length: %d bytes\n", event->data_len);
                 
-                // Print the message content
+                // Process the message content
                 if (event->data_len > 0) {
-                    printf("[MQTT] Message content: %.*s\n", event->data_len, event->data);
+                    // Create a null-terminated string from the message
+                    char message[256];
+                    int len = (event->data_len < sizeof(message) - 1) ? event->data_len : sizeof(message) - 1;
+                    memcpy(message, event->data, len);
+                    message[len] = '\0';
+                    
+                    printf("[MQTT] Message content: %s\n", message);
+                    
+                    // Remove trailing whitespace/newlines
+                    while (len > 0 && (message[len-1] == '\n' || message[len-1] == '\r' || message[len-1] == ' ')) {
+                        message[len-1] = '\0';
+                        len--;
+                    }
+                    
+                    // Control LED based on message
+                    if (strcmp(message, "ON") == 0) {
+                        printf("[MQTT] Comando ON recibido - Encendiendo LED\n");
+                        gpio_set_level(LED_PIN, 1);
+                        ESP_LOGI(TAG, "LED turned ON");
+                    } else if (strcmp(message, "OFF") == 0) {
+                        printf("[MQTT] Comando OFF recibido - Apagando LED\n");
+                        gpio_set_level(LED_PIN, 0);
+                        ESP_LOGI(TAG, "LED turned OFF");
+                    } else {
+                        printf("[MQTT] Mensaje desconocido: %s (esperado: ON u OFF)\n", message);
+                    }
                 }
                 
                 // If message is chunked, print chunk info
