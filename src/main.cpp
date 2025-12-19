@@ -5,13 +5,13 @@
 #include "wifi_manager.h"
 #include "azure_iot_mqtt.h"
 #include "web_server.h"
+#include "led_channels.h"
 #include "azure_config.h"
 #include "esp_netif.h"
 #include <cJSON.h>
 #include <stdio.h>
 
 static const char *TAG = "MAIN";
-#define LED_PIN GPIO_NUM_17
 
 extern "C" void app_main(void) {
     // Small delay to ensure UART is ready
@@ -23,11 +23,10 @@ extern "C" void app_main(void) {
     fflush(stdout);  // Force flush to ensure output is sent immediately
     ESP_LOGI(TAG, "Starting ESP32 Azure IoT Hub application...");
     
-    // Configure LED pin as output
-    printf("[MAIN] Configuring LED pin 17...\n");
-    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(LED_PIN, 0);
-    printf("[MAIN] LED pin configured\n");
+    // Initialize all LED channels
+    printf("[MAIN] Initializing LED channels...\n");
+    led_channels_init();
+    printf("[MAIN] All LED channels configured\n");
     
     // Initialize WiFi
     printf("[MAIN] Initializing WiFi...\n");

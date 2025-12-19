@@ -1,5 +1,5 @@
 #include "web_server.h"
-#include "driver/gpio.h"
+#include "led_channels.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
 #include "esp_netif_ip_addr.h"
@@ -7,7 +7,6 @@
 #include <stdio.h>
 
 static const char *TAG = "WEB_SERVER";
-#define LED_PIN GPIO_NUM_17
 
 static httpd_handle_t server_handle = NULL;
 
@@ -44,9 +43,26 @@ static const char html_page[] =
 "color: #333;"
 "margin-bottom: 30px;"
 "}"
+".channel-control {"
+"display: grid;"
+"grid-template-columns: repeat(2, 1fr);"
+"gap: 20px;"
+"margin-bottom: 20px;"
+"}"
+".channel {"
+"background: #f8f9fa;"
+"padding: 20px;"
+"border-radius: 10px;"
+"border: 2px solid #e9ecef;"
+"}"
+".channel h3 {"
+"margin-top: 0;"
+"color: #495057;"
+"font-size: 16px;"
+"}"
 ".button-group {"
 "display: flex;"
-"gap: 20px;"
+"gap: 10px;"
 "justify-content: center;"
 "}"
 "button {"
@@ -88,18 +104,44 @@ static const char html_page[] =
 "</head>"
 "<body>"
 "<div class=\"container\">"
-"<h1>ESP32 LED Control</h1>"
+"<h1>ESP32 LED Control - 4 Canales</h1>"
+"<div class=\"channel-control\">"
+"<div class=\"channel\">"
+"<h3>RGB (Pin 17)</h3>"
 "<div class=\"button-group\">"
-"<button class=\"btn-on\" onclick=\"controlLED('ON')\">ENCENDER</button>"
-"<button class=\"btn-off\" onclick=\"controlLED('OFF')\">APAGAR</button>"
+"<button class=\"btn-on\" onclick=\"controlChannel('RGB', 'ON')\">ON</button>"
+"<button class=\"btn-off\" onclick=\"controlChannel('RGB', 'OFF')\">OFF</button>"
+"</div>"
+"</div>"
+"<div class=\"channel\">"
+"<h3>WHITE (Pin 16)</h3>"
+"<div class=\"button-group\">"
+"<button class=\"btn-on\" onclick=\"controlChannel('WHITE', 'ON')\">ON</button>"
+"<button class=\"btn-off\" onclick=\"controlChannel('WHITE', 'OFF')\">OFF</button>"
+"</div>"
+"</div>"
+"<div class=\"channel\">"
+"<h3>VERDE (Pin 4)</h3>"
+"<div class=\"button-group\">"
+"<button class=\"btn-on\" onclick=\"controlChannel('VERDE', 'ON')\">ON</button>"
+"<button class=\"btn-off\" onclick=\"controlChannel('VERDE', 'OFF')\">OFF</button>"
+"</div>"
+"</div>"
+"<div class=\"channel\">"
+"<h3>FAR RED (Pin 12)</h3>"
+"<div class=\"button-group\">"
+"<button class=\"btn-on\" onclick=\"controlChannel('FAR_RED', 'ON')\">ON</button>"
+"<button class=\"btn-off\" onclick=\"controlChannel('FAR_RED', 'OFF')\">OFF</button>"
+"</div>"
+"</div>"
 "</div>"
 "<div id=\"status\"></div>"
 "</div>"
 "<script>"
-"function controlLED(command) {"
+"function controlChannel(channel, command) {"
 "var statusDiv = document.getElementById('status');"
-"statusDiv.innerHTML = '<div class=\"status\">Enviando comando...</div>';"
-"fetch('/led?state=' + command, {"
+"statusDiv.innerHTML = '<div class=\"status\">Enviando comando a ' + channel + '...</div>';"
+"fetch('/led?channel=' + channel + '&state=' + command, {"
 "method: 'GET'"
 "})"
 ".then(function(response) { return response.text(); })"
@@ -123,28 +165,65 @@ static esp_err_t root_handler(httpd_req_t *req) {
 
 // Handler for LED control endpoint
 static esp_err_t led_control_handler(httpd_req_t *req) {
-    char query[64];
-    char response[128];
+    char query[128];
+    char response[256];
     
     // Get query string
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char channel[20];
         char state[10];
-        if (httpd_query_key_value(query, "state", state, sizeof(state)) == ESP_OK) {
-            if (strcmp(state, "ON") == 0) {
-                gpio_set_level(LED_PIN, 1);
-                snprintf(response, sizeof(response), "LED encendido correctamente");
-                printf("[WEB] LED turned ON via web interface\n");
-                ESP_LOGI(TAG, "LED turned ON via web");
-            } else if (strcmp(state, "OFF") == 0) {
-                gpio_set_level(LED_PIN, 0);
-                snprintf(response, sizeof(response), "LED apagado correctamente");
-                printf("[WEB] LED turned OFF via web interface\n");
-                ESP_LOGI(TAG, "LED turned OFF via web");
-            } else {
-                snprintf(response, sizeof(response), "Comando invalido. Use ON u OFF");
-            }
+        gpio_num_t pin;
+        const char* channel_name = NULL;
+        
+        // Get channel parameter
+        if (httpd_query_key_value(query, "channel", channel, sizeof(channel)) != ESP_OK) {
+            snprintf(response, sizeof(response), "Error: parametro 'channel' no encontrado");
+            httpd_resp_set_type(req, "text/plain");
+            httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+            return ESP_OK;
+        }
+        
+        // Get state parameter
+        if (httpd_query_key_value(query, "state", state, sizeof(state)) != ESP_OK) {
+            snprintf(response, sizeof(response), "Error: parametro 'state' no encontrado");
+            httpd_resp_set_type(req, "text/plain");
+            httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+            return ESP_OK;
+        }
+        
+        // Map channel name to GPIO pin
+        if (strcmp(channel, "RGB") == 0) {
+            pin = CHANNEL_RGB_PIN;
+            channel_name = "RGB";
+        } else if (strcmp(channel, "WHITE") == 0) {
+            pin = CHANNEL_WHITE_PIN;
+            channel_name = "WHITE";
+        } else if (strcmp(channel, "VERDE") == 0) {
+            pin = CHANNEL_VERDE_PIN;
+            channel_name = "VERDE";
+        } else if (strcmp(channel, "FAR_RED") == 0) {
+            pin = CHANNEL_FAR_RED_PIN;
+            channel_name = "FAR_RED";
         } else {
-            snprintf(response, sizeof(response), "Parametro 'state' no encontrado");
+            snprintf(response, sizeof(response), "Error: Canal desconocido. Use: RGB, WHITE, VERDE, o FAR_RED");
+            httpd_resp_set_type(req, "text/plain");
+            httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+            return ESP_OK;
+        }
+        
+        // Set channel state
+        if (strcmp(state, "ON") == 0) {
+            led_channel_set(pin, 1);
+            snprintf(response, sizeof(response), "Canal %s (Pin %d) encendido correctamente", channel_name, pin);
+            printf("[WEB] Channel %s (Pin %d) turned ON via web interface\n", channel_name, pin);
+            ESP_LOGI(TAG, "Channel %s turned ON via web", channel_name);
+        } else if (strcmp(state, "OFF") == 0) {
+            led_channel_set(pin, 0);
+            snprintf(response, sizeof(response), "Canal %s (Pin %d) apagado correctamente", channel_name, pin);
+            printf("[WEB] Channel %s (Pin %d) turned OFF via web interface\n", channel_name, pin);
+            ESP_LOGI(TAG, "Channel %s turned OFF via web", channel_name);
+        } else {
+            snprintf(response, sizeof(response), "Error: Comando invalido. Use ON u OFF");
         }
     } else {
         snprintf(response, sizeof(response), "Error al procesar la peticion");

@@ -1,17 +1,15 @@
 #include "azure_iot_mqtt.h"
 #include "azure_config.h"
+#include "led_channels.h"
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "esp_event.h"
-#include "driver/gpio.h"
 #include <string.h>
 #include <stdio.h>
 
 static const char *TAG = "AZURE_IOT_MQTT";
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 static bool mqtt_connected = false;
-
-#define LED_PIN GPIO_NUM_17
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                                 int32_t event_id, void *event_data) {
@@ -74,17 +72,64 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                         len--;
                     }
                     
-                    // Control LED based on message
-                    if (strcmp(message, "ON") == 0) {
-                        printf("[MQTT] Comando ON recibido - Encendiendo LED\n");
-                        gpio_set_level(LED_PIN, 1);
-                        ESP_LOGI(TAG, "LED turned ON");
-                    } else if (strcmp(message, "OFF") == 0) {
-                        printf("[MQTT] Comando OFF recibido - Apagando LED\n");
-                        gpio_set_level(LED_PIN, 0);
-                        ESP_LOGI(TAG, "LED turned OFF");
+                    // Control LED channels based on message
+                    // Format: "CHANNEL:STATE" (e.g., "RGB:ON", "WHITE:OFF", "VERDE:ON", "FAR_RED:OFF")
+                    // Or simple "ON"/"OFF" for backward compatibility (controls RGB channel)
+                    char* colon = strchr(message, ':');
+                    if (colon != NULL) {
+                        // Format: CHANNEL:STATE
+                        *colon = '\0';
+                        char* channel = message;
+                        char* state = colon + 1;
+                        
+                        gpio_num_t pin;
+                        const char* channel_name = NULL;
+                        
+                        // Map channel name to GPIO pin
+                        if (strcmp(channel, "RGB") == 0) {
+                            pin = CHANNEL_RGB_PIN;
+                            channel_name = "RGB";
+                        } else if (strcmp(channel, "WHITE") == 0) {
+                            pin = CHANNEL_WHITE_PIN;
+                            channel_name = "WHITE";
+                        } else if (strcmp(channel, "VERDE") == 0) {
+                            pin = CHANNEL_VERDE_PIN;
+                            channel_name = "VERDE";
+                        } else if (strcmp(channel, "FAR_RED") == 0) {
+                            pin = CHANNEL_FAR_RED_PIN;
+                            channel_name = "FAR_RED";
+                        } else {
+                            printf("[MQTT] Canal desconocido: %s (Use: RGB, WHITE, VERDE, FAR_RED)\n", channel);
+                            break;
+                        }
+                        
+                        // Set channel state
+                        if (strcmp(state, "ON") == 0) {
+                            led_channel_set(pin, 1);
+                            printf("[MQTT] Canal %s (Pin %d) encendido\n", channel_name, pin);
+                            ESP_LOGI(TAG, "Channel %s turned ON", channel_name);
+                        } else if (strcmp(state, "OFF") == 0) {
+                            led_channel_set(pin, 0);
+                            printf("[MQTT] Canal %s (Pin %d) apagado\n", channel_name, pin);
+                            ESP_LOGI(TAG, "Channel %s turned OFF", channel_name);
+                        } else {
+                            printf("[MQTT] Estado desconocido: %s (Use: ON u OFF)\n", state);
+                        }
                     } else {
-                        printf("[MQTT] Mensaje desconocido: %s (esperado: ON u OFF)\n", message);
+                        // Backward compatibility: simple ON/OFF controls RGB channel
+                        if (strcmp(message, "ON") == 0) {
+                            printf("[MQTT] Comando ON recibido - Encendiendo canal RGB\n");
+                            led_channel_set(CHANNEL_RGB_PIN, 1);
+                            ESP_LOGI(TAG, "RGB channel turned ON (backward compatibility)");
+                        } else if (strcmp(message, "OFF") == 0) {
+                            printf("[MQTT] Comando OFF recibido - Apagando canal RGB\n");
+                            led_channel_set(CHANNEL_RGB_PIN, 0);
+                            ESP_LOGI(TAG, "RGB channel turned OFF (backward compatibility)");
+                        } else {
+                            printf("[MQTT] Mensaje desconocido: %s\n", message);
+                            printf("[MQTT] Formato esperado: CHANNEL:STATE (ej: RGB:ON, WHITE:OFF)\n");
+                            printf("[MQTT] O simplemente ON/OFF para controlar RGB\n");
+                        }
                     }
                 }
                 
